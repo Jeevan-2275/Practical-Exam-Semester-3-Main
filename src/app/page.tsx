@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ThemeSwitcher } from "./ThemeSwitcher";
+import { useDarkMode } from './useDarkMode';
 import SkeletonLoader from './SkeletonLoader';
 
 interface OrderData {
@@ -22,6 +22,7 @@ interface OrderHistory {
 }
 
 export default function Home() {
+  const [theme, toggleTheme] = useDarkMode();
   const [step, setStep] = useState(1);
   const [orderData, setOrderData] = useState<OrderData>({
     item: '',
@@ -37,6 +38,7 @@ export default function Home() {
   const [orderHistory, setOrderHistory] = useState<OrderHistory[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
+  const [isFormValid, setIsFormValid] = useState(false);
 
   // Load order history from localStorage on component mount
   useEffect(() => {
@@ -45,6 +47,30 @@ export default function Home() {
       setOrderHistory(JSON.parse(savedHistory));
     }
   }, []);
+
+  // Simulate order status updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setOrderHistory(prevHistory => {
+        const updatedHistory = prevHistory.map(order => {
+          if (order.status === 'confirmed') {
+            return { ...order, status: 'preparing' };
+          } else if (order.status === 'preparing') {
+            return { ...order, status: 'delivered' };
+          }
+          return order;
+        });
+        localStorage.setItem('orderHistory', JSON.stringify(updatedHistory));
+        return updatedHistory;
+      });
+    }, 30000); // Update status every 30 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    validateForm();
+  }, [orderData]);
 
   const menuItems = [
     { name: 'Pizza', price: 12.99, emoji: '🍕', category: 'Italian', description: 'Classic cheese pizza with tomato sauce' },
@@ -73,6 +99,11 @@ export default function Home() {
     }
   };
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setOrderData({ ...orderData, [name]: value });
+  };
+
   const validateForm = (): boolean => {
     const errors: {[key: string]: string} = {};
     
@@ -95,7 +126,9 @@ export default function Home() {
     }
     
     setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+    const isValid = Object.keys(errors).length === 0;
+    setIsFormValid(isValid);
+    return isValid;
   };
 
   const handleDeliverySubmit = async (e: React.FormEvent) => {
@@ -127,6 +160,24 @@ export default function Home() {
     setIsSubmitted(true);
   };
 
+  const handleClearHistory = () => {
+    setOrderHistory([]);
+    localStorage.removeItem('orderHistory');
+  };
+
+  const handleReorder = (order: OrderHistory) => {
+    setOrderData({
+      item: order.orderData.item,
+      quantity: order.orderData.quantity,
+      name: order.orderData.name,
+      address: order.orderData.address,
+      phone: order.orderData.phone,
+      specialInstructions: order.orderData.specialInstructions
+    });
+    setShowHistory(false);
+    setStep(2);
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -155,17 +206,17 @@ export default function Home() {
 
   if (isSubmitted) {
     return (
-      <div className="min-h-screen animated-gradient flex items-center justify-center p-4">
-        <div className="glass-card bg-white/70 dark:bg-black/50 rounded-2xl shadow-2xl p-8 max-w-md w-full text-center animate-fade-in">
-          <div className="text-6xl mb-4 animate-bounce">✅</div>
-          <h1 className="text-3xl font-bold text-green-800 mb-2">Order Confirmed!</h1>
+      <div className="min-h-screen animated-gradient flex items-center justify-center p-4 sm:p-6">
+        <div className="glass-card bg-white/70 dark:bg-black/50 rounded-2xl shadow-2xl p-6 sm:p-8 max-w-md w-full text-center animate-fade-in">
+          <div className="text-5xl sm:text-6xl mb-4 animate-bounce">✅</div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-green-800 mb-2">Order Confirmed!</h1>
           <p className="text-gray-600 mb-6">Thank you for your order, {orderData.name}!</p>
           
-          <div className="bg-gradient-to-r from-blue-50 to-green-50 rounded-xl p-6 mb-6">
+          <div className="bg-gradient-to-r from-blue-50 to-green-50 rounded-xl p-4 sm:p-6 mb-6">
             <div className="flex items-center justify-center mb-3">
-              <span className="text-4xl mr-3">{menuItems.find(item => item.name === orderData.item)?.emoji}</span>
+              <span className="text-3xl sm:text-4xl mr-3">{menuItems.find(item => item.name === orderData.item)?.emoji}</span>
               <div>
-                <p className="font-bold text-lg">{orderData.quantity}x {orderData.item}</p>
+                <p className="font-bold text-base sm:text-lg">{orderData.quantity}x {orderData.item}</p>
                 <p className="text-sm text-gray-600">
                   {formatCurrency((menuItems.find(item => item.name === orderData.item)?.price || 0) * orderData.quantity)}
                 </p>
@@ -184,7 +235,7 @@ export default function Home() {
             )}
           </div>
           
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             <button 
               onClick={() => {
                 setIsSubmitted(false);
@@ -192,13 +243,13 @@ export default function Home() {
                 setOrderData({ item: '', quantity: 1, name: '', address: '', phone: '', specialInstructions: '' });
                 setFormErrors({});
               }}
-              className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-all duration-200 font-semibold"
+              className="w-full sm:flex-1 bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-all duration-200 font-semibold"
             >
               New Order
             </button>
             <button
               onClick={() => setShowHistory(true)}
-              className="flex-1 bg-gray-600 text-white px-6 py-3 rounded-xl hover:bg-gray-700 transition-all duration-200 font-semibold"
+              className="w-full sm:flex-1 bg-gray-600 text-white px-6 py-3 rounded-xl hover:bg-gray-700 transition-all duration-200 font-semibold"
             >
               Order History
             </button>
@@ -210,17 +261,25 @@ export default function Home() {
 
   if (showHistory) {
     return (
-      <div className="min-h-screen animated-gradient p-4">
+      <div className="min-h-screen animated-gradient p-4 sm:p-6">
         <div className="max-w-4xl mx-auto">
-          <div className="glass-card bg-white/70 dark:bg-black/50 rounded-2xl shadow-2xl p-8">
-            <div className="flex items-center justify-between mb-8">
-              <h1 className="text-3xl font-bold text-gray-800">Order History</h1>
-              <button
-                onClick={() => setShowHistory(false)}
-                className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
-              >
-                Back
-              </button>
+          <div className="glass-card bg-white/70 dark:bg-black/50 rounded-2xl shadow-2xl p-6 sm:p-8">
+            <div className="flex flex-col sm:flex-row items-center justify-between mb-8">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-4 sm:mb-0">Order History</h1>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowHistory(false)}
+                  className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={handleClearHistory}
+                  className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  Clear History
+                </button>
+              </div>
             </div>
             
             {orderHistory.length === 0 ? (
@@ -258,6 +317,14 @@ export default function Home() {
                       <p><strong>Delivery to:</strong> {order.orderData.address}</p>
                       <p><strong>Phone:</strong> {order.orderData.phone}</p>
                     </div>
+                    <div className="mt-4 flex justify-end">
+                      <button
+                        onClick={() => handleReorder(order)}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        Re-order
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -269,22 +336,34 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen animated-gradient p-4">
+    <div className="min-h-screen animated-gradient p-4 sm:p-6">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-5xl font-bold text-gray-800 mb-3 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+          <h1 className="text-4xl sm:text-5xl font-bold text-gray-800 mb-3 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
             Quick Order
           </h1>
-          <p className="text-gray-600 text-lg">Fast & Simple Food Ordering</p>
-          {orderHistory.length > 0 && (
+          <p className="text-gray-600 text-base sm:text-lg">Fast & Simple Food Ordering</p>
+          
+          {/* Dark Mode Toggle */}
+          <div className="mt-4 flex items-center justify-center gap-4">
             <button
-              onClick={() => setShowHistory(true)}
-              className="mt-4 bg-purple-600 text-white px-6 py-2 rounded-full hover:bg-purple-700 transition-colors font-medium"
+              onClick={toggleTheme}
+              className="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 px-4 py-2 rounded-full hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors font-medium flex items-center gap-2"
             >
-              📋 View Order History ({orderHistory.length})
+              {theme === 'light' ? '🌙' : '☀️'}
+              {theme === 'light' ? 'Dark Mode' : 'Light Mode'}
             </button>
-          )}
+            
+            {orderHistory.length > 0 && (
+              <button
+                onClick={() => setShowHistory(true)}
+                className="bg-purple-600 text-white px-6 py-2 rounded-full hover:bg-purple-700 transition-colors font-medium"
+              >
+                📋 View Order History ({orderHistory.length})
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Progress indicator */}
@@ -332,27 +411,27 @@ export default function Home() {
 
         {/* Step 1: What to Order */}
         {step === 1 && (
-          <div className="bg-white rounded-2xl shadow-2xl p-8 animate-fade-in">
-            <h2 className="text-3xl font-bold text-gray-800 mb-8 text-center">What would you like to order?</h2>
+          <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-8 animate-fade-in">
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-8 text-center">What would you like to order?</h2>
             
             {filteredItems.length === 0 ? (
               <div className="text-center py-12">
-                <div className="text-6xl mb-4">🔍</div>
+                <div className="text-5xl sm:text-6xl mb-4">🔍</div>
                 <p className="text-gray-600 text-lg">No items found. Try a different search.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 {filteredItems.map((item) => (
                   <button
                     key={item.name}
                     onClick={() => handleItemSelect(item.name)}
-                    className="p-6 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-gradient-to-br hover:from-blue-50 hover:to-purple-50 transition-all duration-300 text-center group hover:shadow-lg hover:scale-105 transform menu-item-lift"
+                    className="p-4 sm:p-6 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-gradient-to-br hover:from-blue-50 hover:to-purple-50 transition-all duration-300 text-center group hover:shadow-lg hover:scale-105 transform menu-item-lift"
                   >
-                    <div className="text-5xl mb-3 group-hover:scale-110 transition-transform">{item.emoji}</div>
-                    <div className="font-bold text-xl text-gray-800 mb-1">{item.name}</div>
+                    <div className="text-4xl sm:text-5xl mb-3 group-hover:scale-110 transition-transform">{item.emoji}</div>
+                    <div className="font-bold text-lg sm:text-xl text-gray-800 mb-1">{item.name}</div>
                     <div className="text-sm text-gray-600 mb-2">{item.category}</div>
                     <div className="text-sm text-gray-500 mb-3">{item.description}</div>
-                    <div className="text-2xl font-bold text-blue-600">{formatCurrency(item.price)}</div>
+                    <div className="text-xl sm:text-2xl font-bold text-blue-600">{formatCurrency(item.price)}</div>
                   </button>
                 ))}
               </div>
@@ -362,42 +441,42 @@ export default function Home() {
 
         {/* Step 2: Delivery Details */}
         {step === 2 && (
-          <div className="bg-white rounded-2xl shadow-2xl p-8 animate-fade-in">
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-3xl font-bold text-gray-800">Delivery Details</h2>
+          <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-8 animate-fade-in">
+            <div className="flex flex-col sm:flex-row items-center justify-between mb-8">
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-4 sm:mb-0">Delivery Details</h2>
               <button
                 onClick={() => setStep(1)}
-                className="text-blue-600 hover:text-blue-800 font-medium px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors"
+                className="text-blue-600 hover:text-blue-800 font-medium px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors self-start sm:self-center"
               >
                 ← Back to Menu
               </button>
             </div>
 
             {/* Selected Item Summary */}
-            <div className="mb-8 p-6 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <span className="text-4xl mr-4">{menuItems.find(item => item.name === orderData.item)?.emoji}</span>
+            <div className="mb-8 p-4 sm:p-6 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl">
+              <div className="flex flex-col sm:flex-row items-center justify-between">
+                <div className="flex items-center mb-4 sm:mb-0">
+                  <span className="text-3xl sm:text-4xl mr-4">{menuItems.find(item => item.name === orderData.item)?.emoji}</span>
                   <div>
-                    <h3 className="font-bold text-xl text-gray-800">{orderData.item}</h3>
-                    <p className="text-gray-600">{menuItems.find(item => item.name === orderData.item)?.description}</p>
+                    <h3 className="font-bold text-lg sm:text-xl text-gray-800">{orderData.item}</h3>
+                    <p className="text-gray-600 text-sm sm:text-base">{menuItems.find(item => item.name === orderData.item)?.description}</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-2xl font-bold text-blue-600">
+                  <p className="text-xl sm:text-2xl font-bold text-blue-600">
                     {formatCurrency((menuItems.find(item => item.name === orderData.item)?.price || 0) * orderData.quantity)}
                   </p>
                   <div className="flex items-center justify-end mt-2">
                     <button
                       onClick={() => handleQuantityChange(Math.max(1, orderData.quantity - 1))}
-                      className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 transition-colors font-bold"
+                      className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 transition-colors font-bold"
                     >
                       −
                     </button>
-                    <span className="mx-4 font-bold text-xl min-w-12 text-center">{orderData.quantity}</span>
+                    <span className="mx-3 sm:mx-4 font-bold text-lg sm:text-xl min-w-12 text-center">{orderData.quantity}</span>
                     <button
                       onClick={() => handleQuantityChange(orderData.quantity + 1)}
-                      className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 transition-colors font-bold"
+                      className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 transition-colors font-bold"
                     >
                       +
                     </button>
@@ -414,7 +493,7 @@ export default function Home() {
                     type="text"
                     required
                     value={orderData.name}
-                    onChange={(e) => setOrderData({ ...orderData, name: e.target.value })}
+                    onChange={handleInputChange}
                     className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${
                       formErrors.name ? 'border-red-500 focus:ring-red-200' : 'border-gray-300 focus:border-blue-500'
                     }`}
@@ -429,7 +508,7 @@ export default function Home() {
                     type="tel"
                     required
                     value={orderData.phone}
-                    onChange={(e) => setOrderData({ ...orderData, phone: e.target.value })}
+                    onChange={handleInputChange}
                     className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${
                       formErrors.phone ? 'border-red-500 focus:ring-red-200' : 'border-gray-300 focus:border-blue-500'
                     }`}
@@ -443,8 +522,9 @@ export default function Home() {
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Delivery Address *</label>
                 <textarea
                   required
+                  name="address"
                   value={orderData.address}
-                  onChange={(e) => setOrderData({ ...orderData, address: e.target.value })}
+                  onChange={handleInputChange}
                   className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${
                     formErrors.address ? 'border-red-500 focus:ring-red-200' : 'border-gray-300 focus:border-blue-500'
                   }`}
@@ -457,8 +537,9 @@ export default function Home() {
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Special Instructions (Optional)</label>
                 <textarea
+                  name="specialInstructions"
                   value={orderData.specialInstructions}
-                  onChange={(e) => setOrderData({ ...orderData, specialInstructions: e.target.value })}
+                  onChange={handleInputChange}
                   className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                   placeholder="Any special requests for your order..."
                   rows={2}
@@ -496,7 +577,7 @@ export default function Home() {
 
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || !isFormValid}
                 className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-xl font-bold text-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shimmer-btn"
               >
                 {isLoading ? (
